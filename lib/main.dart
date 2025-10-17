@@ -1,4 +1,3 @@
-// File: lib/main.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,26 +12,45 @@ void main() {
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
+      statusBarIconBrightness: Brightness.light,
     ),
   );
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
   runApp(const MushroomApp());
 }
 
 class MushroomApp extends StatelessWidget {
   const MushroomApp({super.key});
+  
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Mushroom Safety',
       theme: ThemeData(
+        primaryColor: const Color(0xFF00AA13),
+        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF00AA13), // Gojek Green
+          seedColor: const Color(0xFF00AA13),
           brightness: Brightness.light,
         ),
         useMaterial3: true,
         textTheme: GoogleFonts.poppinsTextTheme(),
-        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
+        appBarTheme: AppBarTheme(
+          elevation: 0,
+          backgroundColor: const Color(0xFF00AA13),
+          systemOverlayStyle: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+          ),
+          titleTextStyle: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
       ),
       home: const HomePage(),
       debugShowCheckedModeBanner: false,
@@ -42,11 +60,12 @@ class MushroomApp extends StatelessWidget {
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
+  
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
   final picker = ImagePicker();
   MushroomClassifier? _clf;
   File? _image;
@@ -55,34 +74,48 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Map<String, double>? _thr;
   bool _loading = false;
   bool _picking = false;
-  late AnimationController _bounceController;
+  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
-    _bounceController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
       vsync: this,
-    );
+    )..repeat(reverse: true);
     _initModel();
   }
 
   Future<void> _initModel() async {
-    final clf = MushroomClassifier(
-      modelAsset: 'assets/models/model_dynamic_calib.tflite',
-      labelsAsset: 'assets/models/labels.txt',
-      configAsset: 'assets/models/config.json',
-    );
-    await clf.load();
-    setState(() => _clf = clf);
+    try {
+      final clf = MushroomClassifier(
+        modelAsset: 'assets/models/model_dynamic_calib.tflite',
+        labelsAsset: 'assets/models/labels.txt',
+        configAsset: 'assets/models/config.json',
+      );
+      await clf.load();
+      setState(() => _clf = clf);
+    } catch (e) {
+      _showErrorSnackBar('Gagal memuat model AI: $e');
+    }
   }
 
   Future<void> _pickAndClassify(ImageSource src) async {
     if (_clf == null || _picking) return;
-    _picking = true;
+    
+    setState(() => _picking = true);
+    
     try {
-      final picked = await picker.pickImage(source: src, maxWidth: 2000);
-      if (picked == null) return;
+      final picked = await picker.pickImage(
+        source: src,
+        maxWidth: 2000,
+        imageQuality: 90,
+      );
+      
+      if (picked == null) {
+        setState(() => _picking = false);
+        return;
+      }
 
       setState(() {
         _loading = true;
@@ -90,7 +123,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         _decision = null;
         _probs = null;
         _thr = null;
+        _picking = false;
       });
+
+      // Delay untuk UX yang lebih smooth
+      await Future.delayed(const Duration(milliseconds: 300));
 
       final res = await _clf!.classify(_image!);
 
@@ -100,24 +137,85 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         _probs = res.probs;
         _thr = res.thresholds;
       });
-      _bounceController.forward(from: 0);
-    } finally {
-      _picking = false;
+      
+      // Auto scroll ke hasil
+      if (_decision != null) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        _scrollToResult();
+      }
+    } catch (e) {
+      setState(() {
+        _loading = false;
+        _picking = false;
+      });
+      _showErrorSnackBar('Gagal memproses gambar: $e');
     }
+  }
+
+  void _resetImage() {
+    setState(() {
+      _image = null;
+      _decision = null;
+      _probs = null;
+      _thr = null;
+      _loading = false;
+    });
+  }
+
+  void _scrollToResult() {
+    // Implementasi scroll jika diperlukan
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.poppins(fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFFE53935),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   @override
   void dispose() {
     _clf?.close();
-    _bounceController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
   Color _getResultColor() {
     if (_decision == null) return Colors.grey;
-    if (_decision!.startsWith('POISONOUS')) return const Color(0xFFE53935);
-    if (_decision!.startsWith('EDIBLE')) return const Color(0xFF00AA13);
-    return const Color(0xFFFF6F00);
+    if (_decision!.contains('BERACUN') || _decision!.contains('POISONOUS')) {
+      return const Color(0xFFE53935);
+    }
+    if (_decision!.contains('AMAN') || _decision!.contains('EDIBLE')) {
+      return const Color(0xFF00AA13);
+    }
+    return const Color(0xFFFF9800);
+  }
+
+  IconData _getResultIcon() {
+    if (_decision == null) return Icons.help_outline;
+    if (_decision!.contains('BERACUN') || _decision!.contains('POISONOUS')) {
+      return Icons.dangerous_rounded;
+    }
+    if (_decision!.contains('AMAN') || _decision!.contains('EDIBLE')) {
+      return Icons.check_circle_rounded;
+    }
+    return Icons.warning_rounded;
   }
 
   @override
@@ -126,222 +224,324 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final buttonsDisabled = _loading || _picking;
 
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top Bar - Gojek Style
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-              color: Colors.white,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00AA13),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.eco_outlined,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Mushroom Safety',
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF1C1C1C),
-                        ),
-                      ),
-                      Text(
-                        'AI-powered identification',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const InfoPage(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.info_outline, size: 28),
-                    style: IconButton.styleFrom(
-                      foregroundColor: const Color(0xFF00AA13),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF00AA13), Color(0xFFF8F9FA)],
+            stops: [0.0, 0.3],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Header
+              _buildHeader(context),
+              
+              // Content
+              Expanded(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF8F9FA),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(30),
+                      topRight: Radius.circular(30),
                     ),
                   ),
-                ],
-              ),
-            ),
-
-            // Content
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    // Image Card - Mobile Friendly
-                    Container(
-                      width: double.infinity,
-                      height: size.height * 0.35,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.06),
-                            blurRadius: 20,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: _image != null
-                          ? Stack(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Image.file(
-                                    _image!,
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                  ),
-                                ),
-                                if (_loading)
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.black87,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Shimmer.fromColors(
-                                            baseColor: Colors.white54,
-                                            highlightColor: Colors.white,
-                                            child: const Icon(
-                                              Icons.psychology_outlined,
-                                              size: 60,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 16),
-                                          Text(
-                                            'Analyzing...',
-                                            style: GoogleFonts.poppins(
-                                              color: Colors.white,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            )
-                          : Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.add_photo_alternate_outlined,
-                                    size: 72,
-                                    color: Colors.grey[300],
-                                  )
-                                      .animate(onPlay: (controller) =>
-                                          controller.repeat())
-                                      .fade(duration: 1500.ms)
-                                      .scale(
-                                          begin: const Offset(0.9, 0.9),
-                                          end: const Offset(1, 1),
-                                          duration: 1500.ms),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'Tap button below',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 14,
-                                      color: Colors.grey[500],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Action Buttons - Gojek Style
-                    Row(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: _GojekButton(
-                            icon: Icons.collections_outlined,
-                            label: 'Gallery',
-                            onPressed: buttonsDisabled
-                                ? null
-                                : () => _pickAndClassify(ImageSource.gallery),
-                            isPrimary: false,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _GojekButton(
-                            icon: Icons.camera_alt_outlined,
-                            label: 'Camera',
-                            onPressed: buttonsDisabled
-                                ? null
-                                : () => _pickAndClassify(ImageSource.camera),
-                            isPrimary: true,
-                          ),
-                        ),
+                        // Image Preview Card
+                        _buildImagePreview(size),
+                        
+                        const SizedBox(height: 24),
+                        
+                        // Action Buttons
+                        _buildActionButtons(buttonsDisabled),
+                        
+                        // Results
+                        if (_decision != null) ...[
+                          const SizedBox(height: 32),
+                          _buildResults(),
+                        ],
+                        
+                        // Info Cards
+                        if (_decision == null && !_loading) ...[
+                          const SizedBox(height: 32),
+                          _buildInfoSection(),
+                        ],
+                        
+                        const SizedBox(height: 24),
                       ],
                     ),
-
-                    // Results Section
-                    if (_decision != null) ...[
-                      const SizedBox(height: 24),
-                      _buildResults(),
-                    ],
-
-                    // Info Cards when no result
-                    if (_decision == null && !_loading) ...[
-                      const SizedBox(height: 24),
-                      _buildInfoCards(),
-                    ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.eco_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const InfoPage()),
+                  );
+                },
+                icon: const Icon(Icons.info_outline_rounded, color: Colors.white),
+                iconSize: 28,
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Deteksi Jamur',
+            style: GoogleFonts.poppins(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Identifikasi keamanan jamur dengan AI',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: Colors.white.withValues(alpha: 0.9),
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImagePreview(Size size) {
+    return Container(
+      width: double.infinity,
+      height: size.height * 0.4,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: _image != null
+            ? Stack(
+                children: [
+                  Image.file(
+                    _image!,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
+                  // Close button
+                  if (!_loading)
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: GestureDetector(
+                        onTap: _resetImage,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ).animate().scale(delay: 200.ms, duration: 300.ms),
+                    ),
+                  // Loading overlay
+                  if (_loading)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black87,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 80,
+                              height: 80,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 5,
+                                valueColor: AlwaysStoppedAnimation(
+                                  Colors.white.withValues(alpha: 0.9),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Shimmer.fromColors(
+                              baseColor: Colors.white60,
+                              highlightColor: Colors.white,
+                              child: Text(
+                                'Menganalisis...',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Mohon tunggu sebentar',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              )
+            : Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedBuilder(
+                      animation: _pulseController,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: 1.0 + (_pulseController.value * 0.1),
+                          child: Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00AA13).withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.add_photo_alternate_rounded,
+                              size: 64,
+                              color: const Color(0xFF00AA13).withValues(alpha: 0.6),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Pilih atau Ambil Foto',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Ambil foto jamur yang jelas',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(bool disabled) {
+    return Row(
+      children: [
+        Expanded(
+          child: _ModernButton(
+            icon: Icons.collections_rounded,
+            label: 'Galeri',
+            onPressed: disabled ? null : () => _pickAndClassify(ImageSource.gallery),
+            isPrimary: false,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: _ModernButton(
+            icon: Icons.camera_alt_rounded,
+            label: 'Kamera',
+            onPressed: disabled ? null : () => _pickAndClassify(ImageSource.camera),
+            isPrimary: true,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildResults() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          'Hasil Analisis',
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Colors.grey[800],
+          ),
+        ),
+        const SizedBox(height: 16),
+        
         // Result Card
         Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: _getResultColor().withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              colors: [
+                _getResultColor().withValues(alpha: 0.15),
+                _getResultColor().withValues(alpha: 0.05),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(
               color: _getResultColor().withValues(alpha: 0.3),
               width: 2,
@@ -352,35 +552,31 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: _getResultColor().withValues(alpha: 0.15),
+                  color: _getResultColor().withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  _decision!.startsWith('POISONOUS')
-                      ? Icons.dangerous_outlined
-                      : _decision!.startsWith('EDIBLE')
-                          ? Icons.check_circle_outline
-                          : Icons.warning_amber_outlined,
-                  size: 64,
+                  _getResultIcon(),
+                  size: 56,
                   color: _getResultColor(),
                 ),
               )
-                  .animate(controller: _bounceController)
+                  .animate()
                   .scale(
-                      begin: const Offset(0, 0),
-                      end: const Offset(1, 1),
+                      duration: 600.ms,
                       curve: Curves.elasticOut,
-                      duration: 800.ms)
+                      begin: const Offset(0, 0),
+                      end: const Offset(1, 1))
                   .fade(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               Text(
-                _decision!,
+                _translateDecision(_decision!),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: _getResultColor(),
-                  height: 1.3,
+                  height: 1.4,
                 ),
               ),
             ],
@@ -398,17 +594,28 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
+  String _translateDecision(String decision) {
+    if (decision.contains('POISONOUS')) {
+      return 'BERACUN — JANGAN KONSUMSI!';
+    } else if (decision.contains('EDIBLE')) {
+      return 'AMAN? (Baca peringatan di bawah)';
+    } else if (decision.contains('ABSTAIN')) {
+      return 'TIDAK YAKIN — Perlu Verifikasi Ahli';
+    }
+    return decision;
+  }
+
   Widget _buildConfidenceCard() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -417,27 +624,37 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.analytics_outlined,
-                color: Color(0xFF00AA13),
-                size: 22,
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00AA13).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.analytics_rounded,
+                  color: Color(0xFF00AA13),
+                  size: 20,
+                ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Text(
-                'Confidence Level',
+                'Tingkat Kepercayaan',
                 style: GoogleFonts.poppins(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           ..._probs!.entries.map((e) {
             final pct = e.value * 100;
             final isPoison = e.key.toLowerCase().contains('poison');
+            final label = isPoison ? 'BERACUN' : 'AMAN';
+            
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -445,9 +662,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        e.key.toUpperCase(),
+                        label,
                         style: GoogleFonts.poppins(
-                          fontSize: 13,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                           color: Colors.grey[700],
                         ),
@@ -455,7 +672,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       Text(
                         '${pct.toStringAsFixed(1)}%',
                         style: GoogleFonts.poppins(
-                          fontSize: 14,
+                          fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: isPoison
                               ? const Color(0xFFE53935)
@@ -464,17 +681,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      value: e.value,
-                      minHeight: 8,
-                      backgroundColor: Colors.grey[200],
-                      valueColor: AlwaysStoppedAnimation(
-                        isPoison
-                            ? const Color(0xFFE53935)
-                            : const Color(0xFF00AA13),
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      height: 10,
+                      child: LinearProgressIndicator(
+                        value: e.value,
+                        backgroundColor: Colors.grey[200],
+                        valueColor: AlwaysStoppedAnimation(
+                          isPoison
+                              ? const Color(0xFFE53935)
+                              : const Color(0xFF00AA13),
+                        ),
                       ),
                     ),
                   ),
@@ -489,30 +708,58 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   Widget _buildWarningCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF3E0),
-        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFFFF3E0),
+            const Color(0xFFFFE0B2).withValues(alpha: 0.5),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: const Color(0xFFFF6F00).withValues(alpha: 0.3),
+          color: const Color(0xFFFF9800).withValues(alpha: 0.3),
+          width: 2,
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.shield_outlined,
-            color: Color(0xFFFF6F00),
-            size: 28,
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF9800).withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.shield_rounded,
+              color: Color(0xFFFF9800),
+              size: 24,
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
           Expanded(
-            child: Text(
-              'AI is assistive only. Always consult an expert when in doubt.',
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: const Color(0xFF5D4037),
-                height: 1.4,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Peringatan Penting!',
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFFE65100),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'AI hanya alat bantu. Jangan pernah mengonsumsi jamur tanpa verifikasi dari ahli mikologi atau pakar jamur profesional.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: const Color(0xFF6D4C41),
+                    height: 1.5,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -520,9 +767,20 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildInfoCards() {
+  Widget _buildInfoSection() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Text(
+          'Fitur Unggulan',
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Colors.grey[800],
+          ),
+        ),
+        const SizedBox(height: 16),
+        
         // Features Grid
         GridView.count(
           crossAxisCount: 2,
@@ -530,85 +788,115 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
-          childAspectRatio: 1.3,
-          children: [
+          childAspectRatio: 1.15,
+          children: const [
             _FeatureCard(
-              icon: Icons.flash_on_outlined,
-              title: 'Fast',
-              subtitle: 'Instant analysis',
-              color: const Color(0xFFFF9800),
+              icon: Icons.flash_on_rounded,
+              title: 'Cepat',
+              subtitle: 'Analisis instan',
+              color: Color(0xFFFF9800),
             ),
             _FeatureCard(
-              icon: Icons.shield_outlined,
-              title: 'Safe',
-              subtitle: 'Expert trained',
-              color: const Color(0xFF00AA13),
+              icon: Icons.shield_rounded,
+              title: 'Aman',
+              subtitle: 'Terlatih ahli',
+              color: Color(0xFF00AA13),
             ),
             _FeatureCard(
-              icon: Icons.offline_bolt_outlined,
+              icon: Icons.offline_bolt_rounded,
               title: 'Offline',
-              subtitle: 'No internet needed',
-              color: const Color(0xFF2196F3),
+              subtitle: 'Tanpa internet',
+              color: Color(0xFF2196F3),
             ),
             _FeatureCard(
-              icon: Icons.psychology_outlined,
-              title: 'AI-Powered',
+              icon: Icons.psychology_rounded,
+              title: 'AI Power',
               subtitle: 'TensorFlow Lite',
-              color: const Color(0xFF9C27B0),
+              color: Color(0xFF9C27B0),
             ),
           ],
         ),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
 
         // Tips Card
         Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [Color(0xFF00AA13), Color(0xFF008A0E)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF00AA13).withValues(alpha: 0.3),
+                blurRadius: 15,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.tips_and_updates_outlined,
-                      color: Colors.white, size: 24),
-                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.tips_and_updates_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   Text(
-                    'Pro Tips',
+                    'Tips Penggunaan',
                     style: GoogleFonts.poppins(
-                      fontSize: 16,
+                      fontSize: 17,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               ...[
-                'Take clear, well-lit photos',
-                'Capture multiple angles',
-                'Include cap, gills & stem',
-                'Never consume without expert verification'
+                'Ambil foto yang jelas dan terang',
+                'Foto dari berbagai sudut',
+                'Sertakan tudung, insang & batang',
+                'Jangan konsumsi tanpa verifikasi ahli'
               ].map((tip) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.only(bottom: 10),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.check_circle,
-                            color: Colors.white70, size: 16),
-                        const SizedBox(width: 8),
+                        Container(
+                          margin: const EdgeInsets.only(top: 2),
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.3),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             tip,
                             style: GoogleFonts.poppins(
                               fontSize: 13,
                               color: Colors.white,
+                              height: 1.5,
                             ),
                           ),
                         ),
@@ -623,14 +911,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 }
 
-// Gojek Style Button
-class _GojekButton extends StatelessWidget {
+// Modern Button Widget
+class _ModernButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback? onPressed;
   final bool isPrimary;
 
-  const _GojekButton({
+  const _ModernButton({
     required this.icon,
     required this.label,
     required this.onPressed,
@@ -640,23 +928,36 @@ class _GojekButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: isPrimary ? const Color(0xFF00AA13) : Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      elevation: isPrimary ? 0 : 0,
-      shadowColor: Colors.black.withValues(alpha: 0.1),
+      color: Colors.transparent,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 18),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isPrimary
-                  ? Colors.transparent
-                  : Colors.grey.withValues(alpha: 0.2),
-              width: 1.5,
-            ),
+            gradient: isPrimary
+                ? const LinearGradient(
+                    colors: [Color(0xFF00AA13), Color(0xFF008A0E)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: isPrimary ? null : Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: isPrimary
+                ? null
+                : Border.all(
+                    color: const Color(0xFF00AA13).withValues(alpha: 0.3),
+                    width: 2,
+                  ),
+            boxShadow: [
+              if (isPrimary)
+                BoxShadow(
+                  color: const Color(0xFF00AA13).withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -664,13 +965,13 @@ class _GojekButton extends StatelessWidget {
               Icon(
                 icon,
                 color: isPrimary ? Colors.white : const Color(0xFF00AA13),
-                size: 28,
+                size: 32,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 8),
               Text(
                 label,
                 style: GoogleFonts.poppins(
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: isPrimary ? Colors.white : const Color(0xFF00AA13),
                 ),
@@ -683,7 +984,7 @@ class _GojekButton extends StatelessWidget {
   }
 }
 
-// Feature Card
+// Feature Card Widget
 class _FeatureCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -700,15 +1001,15 @@ class _FeatureCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -716,26 +1017,28 @@ class _FeatureCard extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(icon, color: color, size: 28),
+            child: Icon(icon, color: color, size: 32),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
             title,
             style: GoogleFonts.poppins(
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
             ),
           ),
+          const SizedBox(height: 2),
           Text(
             subtitle,
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
-              fontSize: 11,
+              fontSize: 12,
               color: Colors.grey[600],
             ),
           ),
@@ -752,55 +1055,132 @@ class InfoPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Information',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF00AA13), Color(0xFFF8F9FA)],
+            stops: [0.0, 0.25],
+          ),
         ),
-        backgroundColor: const Color(0xFF00AA13),
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSection(
-              icon: Icons.info_outline,
-              title: 'About This App',
-              content:
-                  'Mushroom Safety uses advanced AI (TensorFlow Lite) to help identify whether mushrooms are potentially edible or poisonous. This is an assistive tool only and should never replace expert consultation.',
-            ),
-            const SizedBox(height: 20),
-            _buildSection(
-              icon: Icons.psychology_outlined,
-              title: 'How It Works',
-              content:
-                  'Our model analyzes mushroom images using Test-Time Augmentation (TTA) with multiple views (rotation, flipping) to improve accuracy. It applies safety-first thresholds to minimize false positives.',
-            ),
-            const SizedBox(height: 20),
-            _buildSection(
-              icon: Icons.warning_amber_outlined,
-              title: 'Important Warning',
-              content:
-                  'Never consume any mushroom based solely on this app. Many poisonous mushrooms closely resemble edible ones. Always consult a professional mycologist or expert before consumption.',
-              isWarning: true,
-            ),
-            const SizedBox(height: 20),
-            _buildFactsCard(),
-            const SizedBox(height: 20),
-            _buildSection(
-              icon: Icons.science_outlined,
-              title: 'Model Details',
-              content:
-                  '• Model: TFLite with dynamic quantization\n'
-                  '• Input: 224x224 RGB images\n'
-                  '• Classes: Edible & Poisonous\n'
-                  '• Safety thresholds: 95% (edible), 70% (poison)\n'
-                  '• TTA: 5-view augmentation',
-            ),
-          ],
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                          color: Colors.white,
+                          iconSize: 22,
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.white.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Icon(
+                            Icons.info_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Informasi',
+                      style: GoogleFonts.poppins(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Pelajari lebih lanjut tentang aplikasi',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Content
+              Expanded(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF8F9FA),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(30),
+                      topRight: Radius.circular(30),
+                    ),
+                  ),
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSection(
+                          icon: Icons.info_rounded,
+                          title: 'Tentang Aplikasi',
+                          content:
+                              'Mushroom Safety menggunakan kecerdasan buatan (AI) berbasis TensorFlow Lite untuk membantu mengidentifikasi apakah jamur berpotensi aman atau beracun. Ini adalah alat bantu saja dan tidak boleh menggantikan konsultasi dengan ahli profesional.',
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSection(
+                          icon: Icons.psychology_rounded,
+                          title: 'Cara Kerja',
+                          content:
+                              'Model AI kami menganalisis gambar jamur menggunakan Test-Time Augmentation (TTA) dengan berbagai sudut pandang (rotasi, flipping) untuk meningkatkan akurasi. Sistem menerapkan ambang batas keamanan-pertama untuk meminimalkan kesalahan positif.',
+                        ),
+                        const SizedBox(height: 16),
+                        _buildSection(
+                          icon: Icons.warning_rounded,
+                          title: 'Peringatan Penting',
+                          content:
+                              'JANGAN PERNAH mengonsumsi jamur berdasarkan aplikasi ini saja. Banyak jamur beracun sangat mirip dengan jamur yang dapat dimakan. Selalu konsultasikan dengan ahli mikologi atau pakar jamur profesional sebelum mengonsumsi jamur apa pun.',
+                          isWarning: true,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildFactsCard(),
+                        const SizedBox(height: 16),
+                        _buildSection(
+                          icon: Icons.science_rounded,
+                          title: 'Detail Model',
+                          content:
+                              '• Model: TFLite dengan kuantisasi dinamis\n'
+                              '• Input: Gambar RGB 224x224\n'
+                              '• Kelas: Aman & Beracun\n'
+                              '• Ambang keamanan: 95% (aman), 70% (beracun)\n'
+                              '• TTA: Augmentasi 5 sudut pandang',
+                        ),
+                        const SizedBox(height: 16),
+                        _buildHowToUse(),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -815,37 +1195,55 @@ class InfoPage extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isWarning
-            ? const Color(0xFFFFF3E0)
-            : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: isWarning ? const Color(0xFFFFF3E0) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isWarning
-              ? const Color(0xFFFF6F00).withValues(alpha: 0.3)
-              : Colors.grey.withValues(alpha: 0.2),
+              ? const Color(0xFFFF9800).withValues(alpha: 0.3)
+              : Colors.grey.withValues(alpha: 0.15),
+          width: 2,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(
-                icon,
-                color: isWarning ? const Color(0xFFFF6F00) : const Color(0xFF00AA13),
-                size: 24,
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: isWarning
+                      ? const Color(0xFFFF9800).withValues(alpha: 0.2)
+                      : const Color(0xFF00AA13).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  icon,
+                  color: isWarning ? const Color(0xFFFF9800) : const Color(0xFF00AA13),
+                  size: 22,
+                ),
               ),
               const SizedBox(width: 12),
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[800],
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Text(
             content,
             style: GoogleFonts.poppins(
@@ -861,51 +1259,216 @@ class InfoPage extends StatelessWidget {
 
   Widget _buildFactsCard() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF00AA13), Color(0xFF008A0E)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00AA13).withValues(alpha: 0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.wb_sunny_outlined, color: Colors.white, size: 24),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.wb_sunny_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+              ),
               const SizedBox(width: 12),
               Text(
-                'Mushroom Facts',
+                'Fakta Tentang Jamur',
                 style: GoogleFonts.poppins(
-                  fontSize: 16,
+                  fontSize: 17,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           ...[
-            '🍄 14,000+ species worldwide',
-            '⚠️ Only ~3% are poisonous',
-            '🔬 100+ species cause serious illness',
-            '💀 Some toxins have no antidote',
-            '👨‍🔬 Always verify with experts'
+            '🍄 Lebih dari 14.000 spesies di dunia',
+            '⚠️ Hanya ~3% yang beracun',
+            '🔬 100+ spesies dapat menyebabkan sakit serius',
+            '💀 Beberapa racun tidak memiliki penawar',
+            '👨‍🔬 Selalu verifikasi dengan ahli'
           ].map(
             (fact) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                fact,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  color: Colors.white,
-                ),
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.3),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      fact,
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: Colors.white,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHowToUse() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.grey.withValues(alpha: 0.15),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2196F3).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.help_rounded,
+                  color: Color(0xFF2196F3),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Cara Menggunakan',
+                style: GoogleFonts.poppins(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...[
+            {
+              'number': '1',
+              'title': 'Ambil atau Pilih Foto',
+              'desc': 'Gunakan kamera atau pilih dari galeri',
+            },
+            {
+              'number': '2',
+              'title': 'Tunggu Analisis',
+              'desc': 'AI akan memproses gambar dalam beberapa detik',
+            },
+            {
+              'number': '3',
+              'title': 'Lihat Hasil',
+              'desc': 'Periksa tingkat kepercayaan dan keputusan',
+            },
+            {
+              'number': '4',
+              'title': 'Verifikasi dengan Ahli',
+              'desc': 'WAJIB konsultasi sebelum mengonsumsi',
+            },
+          ].map((step) => Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF00AA13), Color(0xFF008A0E)],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        step['number']!,
+                        style: GoogleFonts.poppins(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            step['title']!,
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[800],
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            step['desc']!,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )),
         ],
       ),
     );
