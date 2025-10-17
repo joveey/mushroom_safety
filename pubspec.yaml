@@ -1,0 +1,24 @@
+name: mushroom_safety
+description: TFLite mushroom edible vs poisonous (safety-first)
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  tflite_flutter: ^0.11.0
+  image: ^4.1.4
+  image_picker: ^1.1.2
+  path_provider: ^2.1.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/models/model_dynamic_calib.tflite
+    - assets/models/model_float32_calib.tflite
+    - assets/models/labels.txt
+    - assets/models/config.json

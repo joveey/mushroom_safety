@@ -1,0 +1,8 @@
+{
+  "class_names": ["edible", "poisonous"],
+  "img_size": [224, 224],
+  "tau_edible": 0.95,
+  "tau_poison": 0.70,
+  "tau_ood": 0.55,
+  "tta": { "enabled": true, "n": 5 }
+}
