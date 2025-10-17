@@ -1,13 +1,21 @@
 // File: lib/main.dart
-// Ganti seluruh isi file lib/main.dart dengan kode ini
-
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:shimmer/shimmer.dart';
 import 'classifier.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+  );
   runApp(const MushroomApp());
 }
 
@@ -19,16 +27,12 @@ class MushroomApp extends StatelessWidget {
       title: 'Mushroom Safety',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2E7D32),
+          seedColor: const Color(0xFF00AA13), // Gojek Green
           brightness: Brightness.light,
         ),
         useMaterial3: true,
-        cardTheme: const CardThemeData(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(16)),
-          ),
-        ),
+        textTheme: GoogleFonts.poppinsTextTheme(),
+        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
       ),
       home: const HomePage(),
       debugShowCheckedModeBanner: false,
@@ -42,7 +46,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final picker = ImagePicker();
   MushroomClassifier? _clf;
   File? _image;
@@ -51,19 +55,14 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   Map<String, double>? _thr;
   bool _loading = false;
   bool _picking = false;
-  late AnimationController _animController;
-  late Animation<double> _fadeAnimation;
+  late AnimationController _bounceController;
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      duration: const Duration(milliseconds: 500),
+    _bounceController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
       vsync: this,
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeInOut,
     );
     _initModel();
   }
@@ -101,7 +100,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         _probs = res.probs;
         _thr = res.thresholds;
       });
-      _animController.forward(from: 0);
+      _bounceController.forward(from: 0);
     } finally {
       _picking = false;
     }
@@ -110,432 +109,805 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   @override
   void dispose() {
     _clf?.close();
-    _animController.dispose();
+    _bounceController.dispose();
     super.dispose();
   }
 
   Color _getResultColor() {
     if (_decision == null) return Colors.grey;
-    if (_decision!.startsWith('POISONOUS')) return const Color(0xFFD32F2F);
-    if (_decision!.startsWith('EDIBLE')) return const Color(0xFF388E3C);
-    return const Color(0xFFF57C00);
-  }
-
-  IconData _getResultIcon() {
-    if (_decision == null) return Icons.help_outline;
-    if (_decision!.startsWith('POISONOUS')) return Icons.dangerous_rounded;
-    if (_decision!.startsWith('EDIBLE')) return Icons.check_circle_rounded;
-    return Icons.warning_amber_rounded;
+    if (_decision!.startsWith('POISONOUS')) return const Color(0xFFE53935);
+    if (_decision!.startsWith('EDIBLE')) return const Color(0xFF00AA13);
+    return const Color(0xFFFF6F00);
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final size = MediaQuery.of(context).size;
     final buttonsDisabled = _loading || _picking;
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.surfaceContainerLowest,
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                Icons.science_rounded,
-                color: theme.colorScheme.onPrimaryContainer,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text('Mushroom Safety', style: TextStyle(fontWeight: FontWeight.w600)),
-          ],
-        ),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+      body: SafeArea(
         child: Column(
           children: [
-            // Image Display Card
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              height: _image != null ? 280 : 200,
-              child: Card(
-                color: theme.colorScheme.surfaceContainer,
-                child: _image != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Image.file(
-                              _image!,
-                              fit: BoxFit.cover,
-                            ),
-                            if (_loading)
-                              Container(
-                                color: Colors.black45,
-                                child: const Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 3,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      )
-                    : Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.add_photo_alternate_outlined,
-                              size: 64,
-                              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'No image selected',
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                              ),
-                            ),
-                          ],
+            // Top Bar - Gojek Style
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              color: Colors.white,
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00AA13),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.eco_outlined,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Mushroom Safety',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF1C1C1C),
                         ),
                       ),
+                      Text(
+                        'AI-powered identification',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const InfoPage(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.info_outline, size: 28),
+                    style: IconButton.styleFrom(
+                      foregroundColor: const Color(0xFF00AA13),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 20),
 
-            // Action Buttons
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    icon: const Icon(Icons.photo_library_rounded),
-                    label: const Text('Gallery'),
-                    onPressed: buttonsDisabled
-                        ? null
-                        : () => _pickAndClassify(ImageSource.gallery),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    icon: const Icon(Icons.photo_camera_rounded),
-                    label: const Text('Camera'),
-                    onPressed: buttonsDisabled
-                        ? null
-                        : () => _pickAndClassify(ImageSource.camera),
-                  ),
-                ),
-              ],
-            ),
-
-            if (_loading) ...[
-              const SizedBox(height: 24),
-              LinearProgressIndicator(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ],
-
-            // Results Section
-            if (_decision != null) ...[
-              const SizedBox(height: 24),
-              FadeTransition(
-                opacity: _fadeAnimation,
+            // Content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    // Main Result Card
-                    Card(
-                      color: _getResultColor().withValues(alpha: 0.1),
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          children: [
-                            Icon(
-                              _getResultIcon(),
-                              size: 64,
-                              color: _getResultColor(),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _decision!,
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: _getResultColor(),
-                                height: 1.2,
-                              ),
-                            ),
-                          ],
-                        ),
+                    // Image Card - Mobile Friendly
+                    Container(
+                      width: double.infinity,
+                      height: size.height * 0.35,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Confidence Details Card
-                    if (_probs != null) ...[
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.analytics_rounded,
-                                    size: 20,
-                                    color: theme.colorScheme.primary,
+                      child: _image != null
+                          ? Stack(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Image.file(
+                                    _image!,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    height: double.infinity,
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Confidence Analysis',
-                                    style: theme.textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w600,
+                                ),
+                                if (_loading)
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.black87,
+                                      borderRadius: BorderRadius.circular(20),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              ..._probs!.entries.map((e) {
-                                final pct = e.value * 100;
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Text(
-                                            e.key.toUpperCase(),
-                                            style: theme.textTheme.bodyMedium?.copyWith(
-                                              fontWeight: FontWeight.w500,
+                                          Shimmer.fromColors(
+                                            baseColor: Colors.white54,
+                                            highlightColor: Colors.white,
+                                            child: const Icon(
+                                              Icons.psychology_outlined,
+                                              size: 60,
+                                              color: Colors.white,
                                             ),
                                           ),
+                                          const SizedBox(height: 16),
                                           Text(
-                                            '${pct.toStringAsFixed(1)}%',
-                                            style: theme.textTheme.bodyMedium?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                              color: theme.colorScheme.primary,
+                                            'Analyzing...',
+                                            style: GoogleFonts.poppins(
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
                                             ),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 6),
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: LinearProgressIndicator(
-                                          value: e.value,
-                                          minHeight: 8,
-                                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                                          valueColor: AlwaysStoppedAnimation(
-                                            e.key.toLowerCase().contains('poison')
-                                                ? const Color(0xFFD32F2F)
-                                                : const Color(0xFF388E3C),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ),
-                                );
-                              }),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Technical Details Card
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
+                              ],
+                            )
+                          : Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
-                                    Icons.settings_rounded,
-                                    size: 20,
-                                    color: theme.colorScheme.secondary,
-                                  ),
-                                  const SizedBox(width: 8),
+                                    Icons.add_photo_alternate_outlined,
+                                    size: 72,
+                                    color: Colors.grey[300],
+                                  )
+                                      .animate(onPlay: (controller) =>
+                                          controller.repeat())
+                                      .fade(duration: 1500.ms)
+                                      .scale(
+                                          begin: const Offset(0.9, 0.9),
+                                          end: const Offset(1, 1),
+                                          duration: 1500.ms),
+                                  const SizedBox(height: 16),
                                   Text(
-                                    'Model Parameters',
-                                    style: theme.textTheme.titleMedium?.copyWith(
-                                      fontWeight: FontWeight.w600,
+                                    'Tap button below',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      color: Colors.grey[500],
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 12),
-                              if (_thr != null) ...[
-                                _buildInfoRow(
-                                  'Edible Threshold',
-                                  '${(_thr!['tau_edible']! * 100).toStringAsFixed(0)}%',
-                                  Icons.check_circle_outline,
-                                ),
-                                _buildInfoRow(
-                                  'Poison Threshold',
-                                  '${(_thr!['tau_poison']! * 100).toStringAsFixed(0)}%',
-                                  Icons.warning_amber_rounded,
-                                ),
-                                _buildInfoRow(
-                                  'Safety Margin',
-                                  '${((_thr!['margin'] ?? 0.15) * 100).toStringAsFixed(0)}%',
-                                  Icons.security_rounded,
-                                ),
-                                _buildInfoRow(
-                                  'TTA Views',
-                                  '${_thr!['tta_views']!.toInt()}x',
-                                  Icons.view_carousel_rounded,
-                                ),
-                              ],
-                            ],
+                            ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Action Buttons - Gojek Style
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _GojekButton(
+                            icon: Icons.collections_outlined,
+                            label: 'Gallery',
+                            onPressed: buttonsDisabled
+                                ? null
+                                : () => _pickAndClassify(ImageSource.gallery),
+                            isPrimary: false,
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _GojekButton(
+                            icon: Icons.camera_alt_outlined,
+                            label: 'Camera',
+                            onPressed: buttonsDisabled
+                                ? null
+                                : () => _pickAndClassify(ImageSource.camera),
+                            isPrimary: true,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Results Section
+                    if (_decision != null) ...[
+                      const SizedBox(height: 24),
+                      _buildResults(),
                     ],
 
-                    const SizedBox(height: 16),
-
-                    // Warning Card
-                    Card(
-                      color: theme.colorScheme.errorContainer.withValues(alpha: 0.3),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_rounded,
-                              color: theme.colorScheme.error,
-                              size: 24,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'AI predictions are assistive only. When in doubt, always abstain. Your safety is the priority.',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onErrorContainer,
-                                  height: 1.4,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    // Info Cards when no result
+                    if (_decision == null && !_loading) ...[
+                      const SizedBox(height: 24),
+                      _buildInfoCards(),
+                    ],
                   ],
                 ),
               ),
-            ],
-
-            // Info Section (when no results)
-            if (_decision == null && !_loading) ...[
-              const SizedBox(height: 24),
-              Card(
-                color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.tips_and_updates_rounded,
-                        size: 48,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'How It Works',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Upload or capture a mushroom image. Our AI model will analyze it using advanced TensorFlow Lite technology to determine if it\'s edible or poisonous.',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.85),
-                          height: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          _buildFeatureChip(Icons.speed_rounded, 'Fast', theme),
-                          _buildFeatureChip(Icons.security_rounded, 'Safe', theme),
-                          _buildFeatureChip(Icons.offline_bolt_rounded, 'Offline', theme),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+  Widget _buildResults() {
+    return Column(
+      children: [
+        // Result Card
+        Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: _getResultColor().withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _getResultColor().withValues(alpha: 0.3),
+              width: 2,
             ),
           ),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: _getResultColor().withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _decision!.startsWith('POISONOUS')
+                      ? Icons.dangerous_outlined
+                      : _decision!.startsWith('EDIBLE')
+                          ? Icons.check_circle_outline
+                          : Icons.warning_amber_outlined,
+                  size: 64,
+                  color: _getResultColor(),
+                ),
+              )
+                  .animate(controller: _bounceController)
+                  .scale(
+                      begin: const Offset(0, 0),
+                      end: const Offset(1, 1),
+                      curve: Curves.elasticOut,
+                      duration: 800.ms)
+                  .fade(),
+              const SizedBox(height: 16),
+              Text(
+                _decision!,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: _getResultColor(),
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        if (_probs != null) ...[
+          const SizedBox(height: 16),
+          _buildConfidenceCard(),
+        ],
+
+        const SizedBox(height: 16),
+        _buildWarningCard(),
+      ],
+    );
+  }
+
+  Widget _buildConfidenceCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.analytics_outlined,
+                color: Color(0xFF00AA13),
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Confidence Level',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ..._probs!.entries.map((e) {
+            final pct = e.value * 100;
+            final isPoison = e.key.toLowerCase().contains('poison');
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        e.key.toUpperCase(),
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      Text(
+                        '${pct.toStringAsFixed(1)}%',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: isPoison
+                              ? const Color(0xFFE53935)
+                              : const Color(0xFF00AA13),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: e.value,
+                      minHeight: 8,
+                      backgroundColor: Colors.grey[200],
+                      valueColor: AlwaysStoppedAnimation(
+                        isPoison
+                            ? const Color(0xFFE53935)
+                            : const Color(0xFF00AA13),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWarningCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3E0),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFFF6F00).withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.shield_outlined,
+            color: Color(0xFFFF6F00),
+            size: 28,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'AI is assistive only. Always consult an expert when in doubt.',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: const Color(0xFF5D4037),
+                height: 1.4,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFeatureChip(IconData icon, String label, ThemeData theme) {
-    return Chip(
-      avatar: Icon(icon, size: 16, color: theme.colorScheme.primary),
-      label: Text(label),
-      backgroundColor: theme.colorScheme.primaryContainer,
-      side: BorderSide.none,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+  Widget _buildInfoCards() {
+    return Column(
+      children: [
+        // Features Grid
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.3,
+          children: [
+            _FeatureCard(
+              icon: Icons.flash_on_outlined,
+              title: 'Fast',
+              subtitle: 'Instant analysis',
+              color: const Color(0xFFFF9800),
+            ),
+            _FeatureCard(
+              icon: Icons.shield_outlined,
+              title: 'Safe',
+              subtitle: 'Expert trained',
+              color: const Color(0xFF00AA13),
+            ),
+            _FeatureCard(
+              icon: Icons.offline_bolt_outlined,
+              title: 'Offline',
+              subtitle: 'No internet needed',
+              color: const Color(0xFF2196F3),
+            ),
+            _FeatureCard(
+              icon: Icons.psychology_outlined,
+              title: 'AI-Powered',
+              subtitle: 'TensorFlow Lite',
+              color: const Color(0xFF9C27B0),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        // Tips Card
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF00AA13), Color(0xFF008A0E)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.tips_and_updates_outlined,
+                      color: Colors.white, size: 24),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Pro Tips',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...[
+                'Take clear, well-lit photos',
+                'Capture multiple angles',
+                'Include cap, gills & stem',
+                'Never consume without expert verification'
+              ].map((tip) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle,
+                            color: Colors.white70, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            tip,
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Gojek Style Button
+class _GojekButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool isPrimary;
+
+  const _GojekButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    required this.isPrimary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isPrimary ? const Color(0xFF00AA13) : Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      elevation: isPrimary ? 0 : 0,
+      shadowColor: Colors.black.withValues(alpha: 0.1),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isPrimary
+                  ? Colors.transparent
+                  : Colors.grey.withValues(alpha: 0.2),
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: isPrimary ? Colors.white : const Color(0xFF00AA13),
+                size: 28,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isPrimary ? Colors.white : const Color(0xFF00AA13),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Feature Card
+class _FeatureCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+
+  const _FeatureCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              fontSize: 11,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Info Page
+class InfoPage extends StatelessWidget {
+  const InfoPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Information',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: const Color(0xFF00AA13),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSection(
+              icon: Icons.info_outline,
+              title: 'About This App',
+              content:
+                  'Mushroom Safety uses advanced AI (TensorFlow Lite) to help identify whether mushrooms are potentially edible or poisonous. This is an assistive tool only and should never replace expert consultation.',
+            ),
+            const SizedBox(height: 20),
+            _buildSection(
+              icon: Icons.psychology_outlined,
+              title: 'How It Works',
+              content:
+                  'Our model analyzes mushroom images using Test-Time Augmentation (TTA) with multiple views (rotation, flipping) to improve accuracy. It applies safety-first thresholds to minimize false positives.',
+            ),
+            const SizedBox(height: 20),
+            _buildSection(
+              icon: Icons.warning_amber_outlined,
+              title: 'Important Warning',
+              content:
+                  'Never consume any mushroom based solely on this app. Many poisonous mushrooms closely resemble edible ones. Always consult a professional mycologist or expert before consumption.',
+              isWarning: true,
+            ),
+            const SizedBox(height: 20),
+            _buildFactsCard(),
+            const SizedBox(height: 20),
+            _buildSection(
+              icon: Icons.science_outlined,
+              title: 'Model Details',
+              content:
+                  '• Model: TFLite with dynamic quantization\n'
+                  '• Input: 224x224 RGB images\n'
+                  '• Classes: Edible & Poisonous\n'
+                  '• Safety thresholds: 95% (edible), 70% (poison)\n'
+                  '• TTA: 5-view augmentation',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSection({
+    required IconData icon,
+    required String title,
+    required String content,
+    bool isWarning = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isWarning
+            ? const Color(0xFFFFF3E0)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isWarning
+              ? const Color(0xFFFF6F00).withValues(alpha: 0.3)
+              : Colors.grey.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                color: isWarning ? const Color(0xFFFF6F00) : const Color(0xFF00AA13),
+                size: 24,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            content,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              color: Colors.grey[700],
+              height: 1.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFactsCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF00AA13), Color(0xFF008A0E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.wb_sunny_outlined, color: Colors.white, size: 24),
+              const SizedBox(width: 12),
+              Text(
+                'Mushroom Facts',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...[
+            '🍄 14,000+ species worldwide',
+            '⚠️ Only ~3% are poisonous',
+            '🔬 100+ species cause serious illness',
+            '💀 Some toxins have no antidote',
+            '👨‍🔬 Always verify with experts'
+          ].map(
+            (fact) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                fact,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
