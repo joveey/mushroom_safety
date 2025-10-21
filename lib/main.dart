@@ -4,8 +4,21 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:shimmer/shimmer.dart';
 import 'classifier.dart';
+
+class AppColors {
+  static const Color primary = Color(0xFF00B14F);
+  static const Color secondary = Color(0xFF4DD67B);
+  static const Color accent = Color(0xFF8DE7B0);
+  static const Color background = Color(0xFFF6FAF7);
+  static const Color surface = Colors.white;
+  static const Color surfaceAlt = Color(0xFFE8F6EE);
+  static const Color textPrimary = Color(0xFF102A19);
+  static const Color textSecondary = Color(0xFF536363);
+  static const Color border = Color(0xFFE0E8E3);
+  static const Color warning = Color(0xFFF59E0B);
+  static const Color danger = Color(0xFFEF4444);
+}
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,25 +43,36 @@ class MushroomApp extends StatelessWidget {
     return MaterialApp(
       title: 'Mushroom Safety',
       theme: ThemeData(
-        primaryColor: const Color(0xFF00AA13),
-        scaffoldBackgroundColor: const Color(0xFFF8F9FA),
+        scaffoldBackgroundColor: AppColors.background,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF00AA13),
+          seedColor: AppColors.primary,
           brightness: Brightness.light,
+          primary: AppColors.primary,
+          secondary: AppColors.secondary,
+          surface: AppColors.surface,
+          onPrimary: Colors.white,
+          onSecondary: Colors.white,
+          onSurface: AppColors.textPrimary,
+        ),
+        textTheme: GoogleFonts.spaceGroteskTextTheme(
+          ThemeData.light().textTheme.apply(
+                bodyColor: AppColors.textPrimary,
+                displayColor: AppColors.textPrimary,
+              ),
         ),
         useMaterial3: true,
-        textTheme: GoogleFonts.poppinsTextTheme(),
         appBarTheme: AppBarTheme(
           elevation: 0,
-          backgroundColor: const Color(0xFF00AA13),
+          backgroundColor: Colors.transparent,
+          foregroundColor: AppColors.textPrimary,
           systemOverlayStyle: const SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
-            statusBarIconBrightness: Brightness.light,
+            statusBarIconBrightness: Brightness.dark,
           ),
-          titleTextStyle: GoogleFonts.poppins(
+          titleTextStyle: GoogleFonts.spaceGrotesk(
             fontSize: 20,
             fontWeight: FontWeight.w600,
-            color: Colors.white,
+            color: AppColors.textPrimary,
           ),
         ),
       ),
@@ -65,13 +89,12 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final picker = ImagePicker();
   MushroomClassifier? _clf;
   File? _image;
   String? _decision;
   Map<String, double>? _probs;
-  Map<String, double>? _thr;
   bool _loading = false;
   bool _picking = false;
   late AnimationController _pulseController;
@@ -80,9 +103,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void initState() {
     super.initState();
     _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 2000),
       vsync: this,
     )..repeat(reverse: true);
+    
     _initModel();
   }
 
@@ -122,11 +146,9 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         _image = File(picked.path);
         _decision = null;
         _probs = null;
-        _thr = null;
         _picking = false;
       });
 
-      // Delay untuk UX yang lebih smooth
       await Future.delayed(const Duration(milliseconds: 300));
 
       final res = await _clf!.classify(_image!);
@@ -135,14 +157,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
         _loading = false;
         _decision = res.decision;
         _probs = res.probs;
-        _thr = res.thresholds;
       });
-      
-      // Auto scroll ke hasil
-      if (_decision != null) {
-        await Future.delayed(const Duration(milliseconds: 100));
-        _scrollToResult();
-      }
     } catch (e) {
       setState(() {
         _loading = false;
@@ -157,13 +172,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       _image = null;
       _decision = null;
       _probs = null;
-      _thr = null;
       _loading = false;
     });
-  }
-
-  void _scrollToResult() {
-    // Implementasi scroll jika diperlukan
   }
 
   void _showErrorSnackBar(String message) {
@@ -176,12 +186,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
             Expanded(
               child: Text(
                 message,
-                style: GoogleFonts.poppins(fontSize: 13),
+                style: GoogleFonts.spaceGrotesk(fontSize: 13),
               ),
             ),
           ],
         ),
-        backgroundColor: const Color(0xFFE53935),
+        backgroundColor: const Color(0xFFEF4444),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
@@ -199,12 +209,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   Color _getResultColor() {
     if (_decision == null) return Colors.grey;
     if (_decision!.contains('BERACUN') || _decision!.contains('POISONOUS')) {
-      return const Color(0xFFE53935);
+      return AppColors.danger;
     }
     if (_decision!.contains('AMAN') || _decision!.contains('EDIBLE')) {
-      return const Color(0xFF00AA13);
+      return AppColors.primary;
     }
-    return const Color(0xFFFF9800);
+    return AppColors.warning;
   }
 
   IconData _getResultIcon() {
@@ -224,217 +234,248 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
     final buttonsDisabled = _loading || _picking;
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF00AA13), Color(0xFFF8F9FA)],
-            stops: [0.0, 0.3],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              _buildHeader(context),
-              
-              // Content
-              Expanded(
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF8F9FA),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(30),
-                      topRight: Radius.circular(30),
-                    ),
-                  ),
+      backgroundColor: AppColors.background,
+      body: Stack(
+        children: [
+          _buildAnimatedBackground(),
+          SafeArea(
+            child: Column(
+              children: [
+                _buildGlassmorphicHeader(context),
+                Expanded(
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Image Preview Card
-                        _buildImagePreview(size),
-                        
-                        const SizedBox(height: 24),
-                        
-                        // Action Buttons
-                        _buildActionButtons(buttonsDisabled),
-                        
-                        // Results
+                        _buildModernImagePreview(size),
+                        const SizedBox(height: 28),
+                        _buildModernActionButtons(buttonsDisabled),
                         if (_decision != null) ...[
                           const SizedBox(height: 32),
-                          _buildResults(),
+                          _buildEnhancedResults(),
                         ],
-                        
-                        // Info Cards
                         if (_decision == null && !_loading) ...[
                           const SizedBox(height: 32),
-                          _buildInfoSection(),
+                          _buildEnhancedInfoSection(),
                         ],
-                        
                         const SizedBox(height: 24),
                       ],
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildAnimatedBackground() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      color: AppColors.background,
+    );
+  }
+
+  Widget _buildGlassmorphicHeader(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
+                  color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(
                   Icons.eco_rounded,
-                  color: Colors.white,
-                  size: 28,
+                  color: AppColors.primary,
+                  size: 26,
                 ),
               ),
               const Spacer(),
-              IconButton(
-                onPressed: () {
+              InkWell(
+                onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const InfoPage()),
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation, secondaryAnimation) =>
+                          const InfoPage(),
+                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0.15, 0),
+                              end: Offset.zero,
+                            ).animate(CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            )),
+                            child: child,
+                          ),
+                        );
+                      },
+                    ),
                   );
                 },
-                icon: const Icon(Icons.info_outline_rounded, color: Colors.white),
-                iconSize: 28,
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.surfaceAlt,
+                  ),
+                  child: const Icon(
+                    Icons.info_outline_rounded,
+                    color: AppColors.primary,
+                    size: 22,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 22),
           Text(
-            'Deteksi Jamur',
-            style: GoogleFonts.poppins(
+            'Deteksi Jamur AI',
+            style: GoogleFonts.spaceGrotesk(
               fontSize: 28,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: AppColors.textPrimary,
               height: 1.2,
+              letterSpacing: -0.2,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
-            'Identifikasi keamanan jamur dengan AI',
-            style: GoogleFonts.poppins(
+            'Identifikasi keamanan jamur menggunakan kecerdasan buatan.',
+            style: GoogleFonts.spaceGrotesk(
               fontSize: 14,
-              color: Colors.white.withValues(alpha: 0.9),
+              color: AppColors.textSecondary,
               fontWeight: FontWeight.w400,
             ),
           ),
         ],
       ),
-    );
+    ).animate().fadeIn(duration: 400.ms).slideY(begin: -0.15, end: 0);
   }
 
-  Widget _buildImagePreview(Size size) {
+  Widget _buildModernImagePreview(Size size) {
     return Container(
       width: double.infinity,
-      height: size.height * 0.4,
+      height: size.height * 0.38,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(28),
+        color: AppColors.surface,
+        border: Border.all(
+          color: AppColors.border,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(26),
         child: _image != null
             ? Stack(
                 children: [
-                  Image.file(
-                    _image!,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
+                  Positioned.fill(
+                    child: Image.file(
+                      _image!,
+                      fit: BoxFit.cover,
+                    ),
                   ),
-                  // Close button
                   if (!_loading)
                     Positioned(
-                      top: 12,
-                      right: 12,
+                      top: 16,
+                      right: 16,
                       child: GestureDetector(
                         onTap: _resetImage,
                         child: Container(
-                          padding: const EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.6),
                             shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.9),
+                            border: Border.all(color: AppColors.border),
                           ),
                           child: const Icon(
                             Icons.close_rounded,
-                            color: Colors.white,
+                            color: AppColors.textSecondary,
                             size: 20,
                           ),
                         ),
                       ).animate().scale(delay: 200.ms, duration: 300.ms),
                     ),
-                  // Loading overlay
                   if (_loading)
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.black87,
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(26),
+                        color: Colors.white.withValues(alpha: 0.9),
                       ),
                       child: Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            SizedBox(
-                              width: 80,
-                              height: 80,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 5,
-                                valueColor: AlwaysStoppedAnimation(
-                                  Colors.white.withValues(alpha: 0.9),
+                            Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AppColors.primary.withValues(alpha: 0.12),
+                                border: Border.all(
+                                  color: AppColors.primary.withValues(alpha: 0.25),
+                                ),
+                              ),
+                              alignment: Alignment.center,
+                              child: const SizedBox(
+                                width: 64,
+                                height: 64,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 5,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    AppColors.primary,
+                                  ),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 24),
-                            Shimmer.fromColors(
-                              baseColor: Colors.white60,
-                              highlightColor: Colors.white,
-                              child: Text(
-                                'Menganalisis...',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 28),
                             Text(
-                              'Mohon tunggu sebentar',
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                color: Colors.white70,
+                              'Menganalisis gambar...',
+                              style: GoogleFonts.spaceGrotesk(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'AI sedang memproses data...',
+                              style: GoogleFonts.spaceGrotesk(
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
                               ),
                             ),
                           ],
@@ -450,172 +491,225 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     AnimatedBuilder(
                       animation: _pulseController,
                       builder: (context, child) {
+                        final scale = 1.0 + (_pulseController.value * 0.15);
                         return Transform.scale(
-                          scale: 1.0 + (_pulseController.value * 0.1),
+                          scale: scale,
                           child: Container(
-                            padding: const EdgeInsets.all(24),
+                            padding: const EdgeInsets.all(30),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF00AA13).withValues(alpha: 0.1),
                               shape: BoxShape.circle,
+                              color: AppColors.primary.withValues(alpha: 0.12 + (_pulseController.value * 0.08)),
+                              border: Border.all(
+                                color: AppColors.primary.withValues(alpha: 0.4),
+                              ),
                             ),
-                            child: Icon(
+                            child: const Icon(
                               Icons.add_photo_alternate_rounded,
-                              size: 64,
-                              color: const Color(0xFF00AA13).withValues(alpha: 0.6),
+                              size: 72,
+                              color: AppColors.primary,
                             ),
                           ),
                         );
                       },
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 28),
                     Text(
                       'Pilih atau Ambil Foto',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[700],
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Text(
-                      'Ambil foto jamur yang jelas',
-                      style: GoogleFonts.poppins(
+                      'Foto jamur yang jelas untuk hasil terbaik',
+                      style: GoogleFonts.spaceGrotesk(
                         fontSize: 13,
-                        color: Colors.grey[500],
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ],
                 ),
               ),
       ),
-    );
+    ).animate().fadeIn(duration: 500.ms, delay: 200.ms).scale(begin: const Offset(0.95, 0.95), end: const Offset(1, 1));
   }
 
-  Widget _buildActionButtons(bool disabled) {
+  Widget _buildModernActionButtons(bool disabled) {
     return Row(
       children: [
         Expanded(
-          child: _ModernButton(
+          child: _EnhancedButton(
             icon: Icons.collections_rounded,
             label: 'Galeri',
+            backgroundColor: AppColors.surface,
+            foregroundColor: AppColors.textPrimary,
+            borderColor: AppColors.border,
             onPressed: disabled ? null : () => _pickAndClassify(ImageSource.gallery),
-            isPrimary: false,
           ),
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: _ModernButton(
+          child: _EnhancedButton(
             icon: Icons.camera_alt_rounded,
             label: 'Kamera',
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
             onPressed: disabled ? null : () => _pickAndClassify(ImageSource.camera),
-            isPrimary: true,
           ),
         ),
       ],
-    );
+    ).animate().fadeIn(duration: 500.ms, delay: 300.ms).slideY(begin: 0.2, end: 0);
   }
 
-  Widget _buildResults() {
+  Widget _buildEnhancedWarningCard() {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, child) {
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.warning.withValues(alpha: 0.12 + (_pulseController.value * 0.06)),
+                ),
+                child: const Icon(
+                  Icons.warning_rounded,
+                  color: AppColors.warning,
+                  size: 26,
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Peringatan Penting',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'AI hanya alat bantu. Selalu konsultasikan dengan ahli jamur profesional sebelum mengonsumsi jamur apa pun.',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    height: 1.6,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 400.ms, delay: 150.ms).slideX(begin: 0.08, end: 0);
+  }
+
+  Widget _buildEnhancedInfoSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Hasil Analisis',
-          style: GoogleFonts.poppins(
-            fontSize: 20,
+          'Fitur Unggulan',
+          style: GoogleFonts.spaceGrotesk(
+            fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: Colors.grey[800],
+            color: AppColors.textPrimary,
           ),
         ),
-        const SizedBox(height: 16),
-        
-        // Result Card
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
+        const SizedBox(height: 20),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+          childAspectRatio: 0.95,
+          children: [
+            const _EnhancedFeatureCard(
+              icon: Icons.flash_on_rounded,
+              title: 'Cepat',
+              subtitle: 'Analisis instan',
+              colors: [AppColors.primary, AppColors.secondary],
+              delay: 0,
+            ),
+            const _EnhancedFeatureCard(
+              icon: Icons.shield_rounded,
+              title: 'Aman',
+              subtitle: 'Terlatih ahli',
+              colors: [AppColors.secondary, AppColors.accent],
+              delay: 100,
+            ),
+            _EnhancedFeatureCard(
+              icon: Icons.offline_bolt_rounded,
+              title: 'Offline',
+              subtitle: 'Tanpa internet',
               colors: [
-                _getResultColor().withValues(alpha: 0.15),
-                _getResultColor().withValues(alpha: 0.05),
+                AppColors.primary,
+                Color.lerp(AppColors.primary, AppColors.secondary, 0.5)!,
               ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+              delay: 200,
             ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: _getResultColor().withValues(alpha: 0.3),
-              width: 2,
+            _EnhancedFeatureCard(
+              icon: Icons.psychology_rounded,
+              title: 'AI Power',
+              subtitle: 'TensorFlow Lite',
+              colors: [
+                AppColors.secondary,
+                Color.lerp(AppColors.secondary, AppColors.accent, 0.6)!,
+              ],
+              delay: 300,
             ),
-          ),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: _getResultColor().withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  _getResultIcon(),
-                  size: 56,
-                  color: _getResultColor(),
-                ),
-              )
-                  .animate()
-                  .scale(
-                      duration: 600.ms,
-                      curve: Curves.elasticOut,
-                      begin: const Offset(0, 0),
-                      end: const Offset(1, 1))
-                  .fade(),
-              const SizedBox(height: 20),
-              Text(
-                _translateDecision(_decision!),
-                textAlign: TextAlign.center,
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: _getResultColor(),
-                  height: 1.4,
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
-
-        if (_probs != null) ...[
-          const SizedBox(height: 16),
-          _buildConfidenceCard(),
-        ],
-
-        const SizedBox(height: 16),
-        _buildWarningCard(),
+        const SizedBox(height: 24),
+        _buildEnhancedTipsCard(),
       ],
     );
   }
 
-  String _translateDecision(String decision) {
-    if (decision.contains('POISONOUS')) {
-      return 'BERACUN — JANGAN KONSUMSI!';
-    } else if (decision.contains('EDIBLE')) {
-      return 'AMAN? (Baca peringatan di bawah)';
-    } else if (decision.contains('ABSTAIN')) {
-      return 'TIDAK YAKIN — Perlu Verifikasi Ahli';
-    }
-    return decision;
-  }
+  Widget _buildEnhancedTipsCard() {
+    final tips = [
+      'Ambil foto yang jelas dan terang',
+      'Foto dari berbagai sudut',
+      'Sertakan tudung, insang & batang',
+      'Jangan konsumsi tanpa verifikasi ahli'
+    ];
 
-  Widget _buildConfidenceCard() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -625,36 +719,225 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00AA13).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  shape: BoxShape.circle,
+                  color: AppColors.primary.withValues(alpha: 0.12),
                 ),
                 child: const Icon(
-                  Icons.analytics_rounded,
-                  color: Color(0xFF00AA13),
-                  size: 20,
+                  Icons.tips_and_updates_rounded,
+                  color: AppColors.primary,
+                  size: 24,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Text(
-                'Tingkat Kepercayaan',
-                style: GoogleFonts.poppins(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
+                'Tips Penggunaan',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 20),
-          ..._probs!.entries.map((e) {
-            final pct = e.value * 100;
-            final isPoison = e.key.toLowerCase().contains('poison');
-            final label = isPoison ? 'BERACUN' : 'AMAN';
-            
+          ...tips.asMap().entries.map((entry) {
             return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 2),
+                    padding: const EdgeInsets.all(6),
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.surfaceAlt,
+                    ),
+                    child: const Icon(
+                      Icons.check,
+                      color: AppColors.primary,
+                      size: 14,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      entry.value,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                        height: 1.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ).animate(delay: Duration(milliseconds: 400 + (entry.key * 100)))
+                .fadeIn(duration: 400.ms)
+                .slideX(begin: -0.2, end: 0);
+          }),
+        ],
+      ),
+    ).animate().fadeIn(duration: 600.ms, delay: 400.ms).slideY(begin: 0.2, end: 0);
+  }
+
+  Widget _buildEnhancedResults() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Hasil Analisis',
+          style: GoogleFonts.spaceGrotesk(
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            color: AppColors.surface,
+            border: Border.all(
+              color: _getResultColor().withValues(alpha: 0.25),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _getResultColor().withValues(alpha: 0.18),
+                blurRadius: 26,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              AnimatedBuilder(
+                animation: _pulseController,
+                builder: (context, child) {
+                  return Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _getResultColor().withValues(alpha: 0.12 + (_pulseController.value * 0.08)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _getResultColor().withValues(alpha: 0.18 + (_pulseController.value * 0.12)),
+                          blurRadius: 22,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      _getResultIcon(),
+                      size: 64,
+                      color: _getResultColor(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+              Text(
+                _translateDecision(_decision!),
+                textAlign: TextAlign.center,
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Tingkat risiko dihitung otomatis oleh model AI.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ).animate().fadeIn(duration: 600.ms).scale(
+              begin: const Offset(0.9, 0.9),
+              end: const Offset(1, 1),
+            ),
+        if (_probs != null) ...[
+          const SizedBox(height: 20),
+          _buildEnhancedConfidenceCard(),
+        ],
+        const SizedBox(height: 20),
+        _buildEnhancedWarningCard(),
+      ],
+    );
+  }
+
+  String _translateDecision(String decision) {
+    if (decision.contains('POISONOUS')) {
+      return 'BERACUN - JANGAN KONSUMSI!';
+    } else if (decision.contains('EDIBLE')) {
+      return 'AMAN? (Baca peringatan di bawah)';
+    } else if (decision.contains('ABSTAIN')) {
+      return 'TIDAK YAKIN - Perlu Verifikasi Ahli';
+    }
+    return decision;
+  }
+
+  Widget _buildEnhancedConfidenceCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                ),
+                child: const Icon(
+                  Icons.analytics_rounded,
+                  color: AppColors.primary,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Tingkat Kepercayaan',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          ..._probs!.entries.map((entry) {
+            final percent = entry.value * 100;
+            final isPoison = entry.key.toLowerCase().contains('poison');
+            final label = isPoison ? 'BERACUN' : 'AMAN';
+            final color = isPoison ? AppColors.danger : AppColors.primary;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -663,38 +946,30 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                     children: [
                       Text(
                         label,
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: Colors.grey[700],
+                          color: AppColors.textSecondary,
                         ),
                       ),
                       Text(
-                        '${pct.toStringAsFixed(1)}%',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
+                        '${percent.toStringAsFixed(1)}%',
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: isPoison
-                              ? const Color(0xFFE53935)
-                              : const Color(0xFF00AA13),
+                          color: color,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: SizedBox(
-                      height: 10,
-                      child: LinearProgressIndicator(
-                        value: e.value,
-                        backgroundColor: Colors.grey[200],
-                        valueColor: AlwaysStoppedAnimation(
-                          isPoison
-                              ? const Color(0xFFE53935)
-                              : const Color(0xFF00AA13),
-                        ),
-                      ),
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: entry.value,
+                      minHeight: 12,
+                      backgroundColor: AppColors.surfaceAlt,
+                      valueColor: AlwaysStoppedAnimation<Color>(color),
                     ),
                   ),
                 ],
@@ -703,313 +978,139 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           }),
         ],
       ),
+    ).animate().fadeIn(duration: 600.ms, delay: 100.ms).slideX(begin: -0.1, end: 0);
+  }
+}
+
+class _EnhancedButton extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final Color? borderColor;
+  final VoidCallback? onPressed;
+
+  const _EnhancedButton({
+    required this.icon,
+    required this.label,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    this.borderColor,
+    required this.onPressed,
+  });
+
+  @override
+  State<_EnhancedButton> createState() => _EnhancedButtonState();
+}
+
+class _EnhancedButtonState extends State<_EnhancedButton> with SingleTickerProviderStateMixin {
+  late AnimationController _scaleController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 150),
+      vsync: this,
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _scaleController, curve: Curves.easeInOut),
     );
   }
 
-  Widget _buildWarningCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFFFFF3E0),
-            const Color(0xFFFFE0B2).withValues(alpha: 0.5),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFFFF9800).withValues(alpha: 0.3),
-          width: 2,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFF9800).withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.shield_rounded,
-              color: Color(0xFFFF9800),
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Peringatan Penting!',
-                  style: GoogleFonts.poppins(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFE65100),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'AI hanya alat bantu. Jangan pernah mengonsumsi jamur tanpa verifikasi dari ahli mikologi atau pakar jamur profesional.',
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    color: const Color(0xFF6D4C41),
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  @override
+  void dispose() {
+    _scaleController.dispose();
+    super.dispose();
   }
 
-  Widget _buildInfoSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Fitur Unggulan',
-          style: GoogleFonts.poppins(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: Colors.grey[800],
-          ),
-        ),
-        const SizedBox(height: 16),
-        
-        // Features Grid
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.15,
-          children: const [
-            _FeatureCard(
-              icon: Icons.flash_on_rounded,
-              title: 'Cepat',
-              subtitle: 'Analisis instan',
-              color: Color(0xFFFF9800),
-            ),
-            _FeatureCard(
-              icon: Icons.shield_rounded,
-              title: 'Aman',
-              subtitle: 'Terlatih ahli',
-              color: Color(0xFF00AA13),
-            ),
-            _FeatureCard(
-              icon: Icons.offline_bolt_rounded,
-              title: 'Offline',
-              subtitle: 'Tanpa internet',
-              color: Color(0xFF2196F3),
-            ),
-            _FeatureCard(
-              icon: Icons.psychology_rounded,
-              title: 'AI Power',
-              subtitle: 'TensorFlow Lite',
-              color: Color(0xFF9C27B0),
-            ),
-          ],
-        ),
+  @override
+  Widget build(BuildContext context) {
+    final bool disabled = widget.onPressed == null;
+    final Color bg = disabled
+        ? Color.lerp(widget.backgroundColor, AppColors.border, 0.5)!
+        : widget.backgroundColor;
+    final Color fg = disabled
+        ? Color.lerp(widget.foregroundColor, AppColors.textSecondary, 0.5)!
+        : widget.foregroundColor;
 
-        const SizedBox(height: 20),
-
-        // Tips Card
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF00AA13), Color(0xFF008A0E)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF00AA13).withValues(alpha: 0.3),
-                blurRadius: 15,
-                offset: const Offset(0, 6),
+    return GestureDetector(
+      onTapDown: (_) => _scaleController.forward(),
+      onTapUp: (_) {
+        _scaleController.reverse();
+        widget.onPressed?.call();
+      },
+      onTapCancel: () => _scaleController.reverse(),
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scaleAnimation.value,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(20),
+                border: widget.borderColor != null
+                    ? Border.all(color: widget.borderColor!, width: 1.2)
+                    : null,
               ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.tips_and_updates_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
+                  Icon(
+                    widget.icon,
+                    color: fg,
+                    size: 32,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(height: 10),
                   Text(
-                    'Tips Penggunaan',
-                    style: GoogleFonts.poppins(
-                      fontSize: 17,
+                    widget.label,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: fg,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              ...[
-                'Ambil foto yang jelas dan terang',
-                'Foto dari berbagai sudut',
-                'Sertakan tudung, insang & batang',
-                'Jangan konsumsi tanpa verifikasi ahli'
-              ].map((tip) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          margin: const EdgeInsets.only(top: 2),
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.3),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.check,
-                            color: Colors.white,
-                            size: 14,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            tip,
-                            style: GoogleFonts.poppins(
-                              fontSize: 13,
-                              color: Colors.white,
-                              height: 1.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// Modern Button Widget
-class _ModernButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onPressed;
-  final bool isPrimary;
-
-  const _ModernButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-    required this.isPrimary,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          decoration: BoxDecoration(
-            gradient: isPrimary
-                ? const LinearGradient(
-                    colors: [Color(0xFF00AA13), Color(0xFF008A0E)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
-            color: isPrimary ? null : Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: isPrimary
-                ? null
-                : Border.all(
-                    color: const Color(0xFF00AA13).withValues(alpha: 0.3),
-                    width: 2,
-                  ),
-            boxShadow: [
-              if (isPrimary)
-                BoxShadow(
-                  color: const Color(0xFF00AA13).withValues(alpha: 0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                color: isPrimary ? Colors.white : const Color(0xFF00AA13),
-                size: 32,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: isPrimary ? Colors.white : const Color(0xFF00AA13),
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 }
 
-// Feature Card Widget
-class _FeatureCard extends StatelessWidget {
+class _EnhancedFeatureCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color color;
+  final List<Color> colors;
+  final int delay;
 
-  const _FeatureCard({
+  const _EnhancedFeatureCard({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.color,
+    required this.colors,
+    required this.delay,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -1017,167 +1118,92 @@ class _FeatureCard extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
+              gradient: LinearGradient(colors: colors),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.first.withValues(alpha: 0.3),
+                  blurRadius: 15,
+                  spreadRadius: 2,
+                ),
+              ],
             ),
-            child: Icon(icon, color: color, size: 32),
+            child: Icon(icon, color: Colors.white, size: 32),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Text(
             title,
-            style: GoogleFonts.poppins(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[800],
+            style: GoogleFonts.spaceGrotesk(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: GoogleFonts.poppins(
+            style: GoogleFonts.spaceGrotesk(
               fontSize: 12,
-              color: Colors.grey[600],
+              color: AppColors.textSecondary,
             ),
           ),
         ],
       ),
-    );
+    ).animate(delay: Duration(milliseconds: delay))
+        .fadeIn(duration: 500.ms)
+        .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1));
   }
 }
 
-// Info Page
 class InfoPage extends StatelessWidget {
   const InfoPage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF00AA13), Color(0xFFF8F9FA)],
-            stops: [0.0, 0.25],
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.primary,
+        title: Text(
+          'Tentang Aplikasi',
+          style: GoogleFonts.spaceGrotesk(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w700,
           ),
         ),
-        child: SafeArea(
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          physics: const BouncingScrollPhysics(),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                          color: Colors.white,
-                          iconSize: 22,
-                          style: IconButton.styleFrom(
-                            backgroundColor: Colors.white.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Icon(
-                            Icons.info_rounded,
-                            color: Colors.white,
-                            size: 28,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Informasi',
-                      style: GoogleFonts.poppins(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        height: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Pelajari lebih lanjut tentang aplikasi',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: Colors.white.withValues(alpha: 0.9),
-                      ),
-                    ),
-                  ],
-                ),
+              _infoCard(
+                icon: Icons.eco_rounded,
+                title: 'Mushroom Safety',
+                description:
+                    'Aplikasi ini memanfaatkan model TensorFlow Lite untuk membantu menilai jamur dari foto. Fokus utama kami tetap pada keselamatan pengguna.',
               ),
-              
-              // Content
-              Expanded(
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF8F9FA),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(30),
-                      topRight: Radius.circular(30),
-                    ),
-                  ),
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildSection(
-                          icon: Icons.info_rounded,
-                          title: 'Tentang Aplikasi',
-                          content:
-                              'Mushroom Safety menggunakan kecerdasan buatan (AI) berbasis TensorFlow Lite untuk membantu mengidentifikasi apakah jamur berpotensi aman atau beracun. Ini adalah alat bantu saja dan tidak boleh menggantikan konsultasi dengan ahli profesional.',
-                        ),
-                        const SizedBox(height: 16),
-                        _buildSection(
-                          icon: Icons.psychology_rounded,
-                          title: 'Cara Kerja',
-                          content:
-                              'Model AI kami menganalisis gambar jamur menggunakan Test-Time Augmentation (TTA) dengan berbagai sudut pandang (rotasi, flipping) untuk meningkatkan akurasi. Sistem menerapkan ambang batas keamanan-pertama untuk meminimalkan kesalahan positif.',
-                        ),
-                        const SizedBox(height: 16),
-                        _buildSection(
-                          icon: Icons.warning_rounded,
-                          title: 'Peringatan Penting',
-                          content:
-                              'JANGAN PERNAH mengonsumsi jamur berdasarkan aplikasi ini saja. Banyak jamur beracun sangat mirip dengan jamur yang dapat dimakan. Selalu konsultasikan dengan ahli mikologi atau pakar jamur profesional sebelum mengonsumsi jamur apa pun.',
-                          isWarning: true,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildFactsCard(),
-                        const SizedBox(height: 16),
-                        _buildSection(
-                          icon: Icons.science_rounded,
-                          title: 'Detail Model',
-                          content:
-                              '• Model: TFLite dengan kuantisasi dinamis\n'
-                              '• Input: Gambar RGB 224x224\n'
-                              '• Kelas: Aman & Beracun\n'
-                              '• Ambang keamanan: 95% (aman), 70% (beracun)\n'
-                              '• TTA: Augmentasi 5 sudut pandang',
-                        ),
-                        const SizedBox(height: 16),
-                        _buildHowToUse(),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
-                  ),
-                ),
+              const SizedBox(height: 16),
+              _infoCard(
+                icon: Icons.psychology_rounded,
+                title: 'Cara Kerja',
+                description:
+                    'Model AI menganalisis beberapa augmentasi gambar (Test-Time Augmentation) untuk memperoleh tingkat kepercayaan terbaik sebelum memberikan keputusan.',
+              ),
+              const SizedBox(height: 16),
+              _infoCard(
+                icon: Icons.warning_rounded,
+                title: 'Disarankan Tetap Konsultasi',
+                description:
+                    'Keputusan AI tidak menggantikan pakar jamur. Pastikan selalu berkonsultasi dengan ahli mikologi sebelum mengonsumsi jamur apa pun.',
+                isWarning: true,
               ),
             ],
           ),
@@ -1186,91 +1212,35 @@ class InfoPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSection({
+  static Widget _infoCard({
     required IconData icon,
     required String title,
-    required String content,
+    required String description,
     bool isWarning = false,
   }) {
+    final gradientColors = isWarning
+        ? [const Color(0xFFFFF6E6), const Color(0xFFFFE4D6)]
+        : [const Color(0xFFF5FFFA), const Color(0xFFE8FFF0)];
+
+    final iconColor = isWarning ? AppColors.warning : AppColors.primary;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isWarning ? const Color(0xFFFFF3E0) : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isWarning
-              ? const Color(0xFFFF9800).withValues(alpha: 0.3)
-              : Colors.grey.withValues(alpha: 0.15),
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: isWarning
-                      ? const Color(0xFFFF9800).withValues(alpha: 0.2)
-                      : const Color(0xFF00AA13).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  icon,
-                  color: isWarning ? const Color(0xFFFF9800) : const Color(0xFF00AA13),
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  title,
-                  style: GoogleFonts.poppins(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey[800],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            content,
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: Colors.grey[700],
-              height: 1.6,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFactsCard() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF00AA13), Color(0xFF008A0E)],
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          colors: gradientColors,
         ),
-        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: (isWarning ? AppColors.warning : AppColors.primary)
+              .withValues(alpha: 0.2),
+        ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF00AA13).withValues(alpha: 0.3),
-            blurRadius: 15,
+            color: iconColor.withValues(alpha: 0.08),
+            blurRadius: 12,
             offset: const Offset(0, 6),
           ),
         ],
@@ -1279,196 +1249,38 @@ class InfoPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(12),
+                  shape: BoxShape.circle,
+                  color: iconColor.withValues(alpha: 0.12),
                 ),
-                child: const Icon(
-                  Icons.wb_sunny_rounded,
-                  color: Colors.white,
-                  size: 22,
-                ),
+                child: Icon(icon, color: iconColor, size: 24),
               ),
-              const SizedBox(width: 12),
-              Text(
-                'Fakta Tentang Jamur',
-                style: GoogleFonts.poppins(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          ...[
-            '🍄 Lebih dari 14.000 spesies di dunia',
-            '⚠️ Hanya ~3% yang beracun',
-            '🔬 100+ spesies dapat menyebabkan sakit serius',
-            '💀 Beberapa racun tidak memiliki penawar',
-            '👨‍🔬 Selalu verifikasi dengan ahli'
-          ].map(
-            (fact) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(top: 2),
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.3),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check,
-                      color: Colors.white,
-                      size: 12,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      fact,
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        color: Colors.white,
-                        height: 1.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+          const SizedBox(height: 12),
+          Text(
+            description,
+            style: GoogleFonts.spaceGrotesk(
+              fontSize: 14,
+              color: Colors.black.withValues(alpha: 0.7),
+              height: 1.5,
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHowToUse() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.grey.withValues(alpha: 0.15),
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2196F3).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.help_rounded,
-                  color: Color(0xFF2196F3),
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                'Cara Menggunakan',
-                style: GoogleFonts.poppins(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.grey[800],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ...[
-            {
-              'number': '1',
-              'title': 'Ambil atau Pilih Foto',
-              'desc': 'Gunakan kamera atau pilih dari galeri',
-            },
-            {
-              'number': '2',
-              'title': 'Tunggu Analisis',
-              'desc': 'AI akan memproses gambar dalam beberapa detik',
-            },
-            {
-              'number': '3',
-              'title': 'Lihat Hasil',
-              'desc': 'Periksa tingkat kepercayaan dan keputusan',
-            },
-            {
-              'number': '4',
-              'title': 'Verifikasi dengan Ahli',
-              'desc': 'WAJIB konsultasi sebelum mengonsumsi',
-            },
-          ].map((step) => Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF00AA13), Color(0xFF008A0E)],
-                        ),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        step['number']!,
-                        style: GoogleFonts.poppins(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            step['title']!,
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[800],
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            step['desc']!,
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                              height: 1.4,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              )),
         ],
       ),
     );

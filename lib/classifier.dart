@@ -117,7 +117,9 @@ class MushroomClassifier {
       if (sum == null) {
         sum = List<double>.from(probs);
       } else {
-        for (int i = 0; i < sum.length; i++) sum[i] += probs[i];
+        for (int i = 0; i < sum.length; i++) {
+          sum[i] += probs[i];
+        }
       }
     }
     var probs = sum!.map((e) => e / views.length).toList();
